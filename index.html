@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<script>
+		var ctx = null;
+		var vctx = null;
+		var canvas = null;
+		var vcanvas = null;
+		var video = null;
+		var ip = null;
+		
+		async function convertCanvas24Bit(ctx, xres, yres)
+		{
+			let imgData = ctx.getImageData(0, 0, xres, yres);		
+			let pixels = imgData.data;
+			var buff = new Uint8Array(xres * yres * 3);
+			for(var y = 0; y < yres; y++)
+				for(var x = 0; x < xres; x++)
+				{
+					buff[(y * xres + x) * 3 + 0] = pixels[(x + y * xres) * 4 + 0] >> 3;
+					buff[(y * xres + x) * 3 + 1] = pixels[(x + y * xres) * 4 + 1] >> 4;
+					buff[(y * xres + x) * 3 + 2] = pixels[(x + y * xres) * 4 + 2] >> 4;
+				}
+			let req = new XMLHttpRequest();
+			req.open("POST", "http://"+ ip + "/frame", true);
+			req.setRequestHeader("Accept-Language", "");
+			req.setRequestHeader("Accept", "");
+			await req.send(buff);
+		}
+
+		async function convertCanvas16Bit(ctx, xres, yres)
+		{
+			let imgData = ctx.getImageData(0, 0, xres, yres);		
+			let pixels = imgData.data;
+			var buff = new Uint8Array(xres * yres * 2);
+			for(var y = 0; y < yres; y++)
+				for(var x = 0; x < xres; x++)
+				{
+					let r = pixels[(x + y * xres) * 4 + 0] >> 3;
+					let g = pixels[(x + y * xres) * 4 + 1] >> 4;
+					let b = pixels[(x + y * xres) * 4 + 2] >> 4;
+					let rgb = r | (g << 5) | (b << 11);
+					buff[(y * xres + x) * 2 + 0] = rgb & 255;
+					buff[(y * xres + x) * 2 + 1] = rgb >> 8;
+				}
+			let req = new XMLHttpRequest();
+			req.open("POST", "http://"+ ip, true);
+			req.setRequestHeader("Accept-Language", "");
+			req.setRequestHeader("Accept", "");
+			await req.send(buff);
+		}
+
+		async function convertCanvas8Bit(ctx, xres, yres)
+		{
+			let imgData = ctx.getImageData(0, 0, xres, yres);		
+			let pixels = imgData.data;
+			var buff = new Uint8Array(xres * yres);
+			for(var y = 0; y < yres; y++)
+				for(var x = 0; x < xres; x++)
+				{
+					let r = pixels[(x + y * xres) * 4 + 0] >> 5;
+					let g = pixels[(x + y * xres) * 4 + 1] >> 5;
+					let b = pixels[(x + y * xres) * 4 + 2] >> 6;
+					let rgb = r | (g << 3) | (b << 6);
+					buff[y * xres + x] = rgb;
+				}
+			let req = new XMLHttpRequest();
+			req.open("POST", "http://"+ ip, true);
+			req.setRequestHeader("Accept-Language", "");
+			req.setRequestHeader("Accept", "");
+			await req.send(buff);
+		}
+
+		async function scaleDownImage(c0, c1, xres0, yres0, xres1, yres1)
+		{
+			let imgData0 = c0.getImageData(0, 0, xres0, yres0);
+			let pixels0 = imgData0.data;
+			let imgData1 = c1.getImageData(0, 0, xres1, yres1);
+			let pixels1 = imgData1.data;
+			let xo0 = (xres0 - yres0) * 0.5;
+			let s = yres0 / yres1;
+			for(let y = 0; y < yres1; y++)
+				for(let x = 0; x < xres1; x++)
+				{
+					let x0 = Math.floor(xo0 + x * s);
+					let y0 = Math.floor(y * s);
+					let x1 = Math.floor(x0 + s);
+					let y1 = Math.floor(y0 + s);
+					let r = 0;
+					let g = 0;
+					let b = 0;
+					let pix = 0;
+					for(let yy = y0; yy < y1; yy++)
+						for(let xx = x0; xx < x1; xx++)
+						{
+							let i = (yy * xres0 + xx) * 4;
+							r += pixels0[i + 0];
+							g += pixels0[i + 1];
+							b += pixels0[i + 2];
+							pix++;
+						}
+					let i = (y * xres1 + x) * 4;
+					pixels1[i + 0] = r / pix;
+					pixels1[i + 1] = g / pix;
+					pixels1[i + 2] = b / pix;
+					pixels1[i + 3] = 255;
+				}
+			c1.putImageData(imgData1, 0, 0);
+		}
+
+		async function videoCB()
+		{
+			let w = (video.videoWidth / video.videoHeight) * canvas.height;
+			vctx.drawImage(video, 0, 0);
+			await scaleDownImage(vctx, ctx, video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+			//ctx.drawImage(video, (canvas.width - w) * 0.5, 0, w, canvas.height);
+			//await convertCanvas24Bit(ctx, canvas.width, canvas.height);
+			//await convertCanvas8Bit(ctx, canvas.width, canvas.height);
+			await convertCanvas16Bit(ctx, canvas.width, canvas.height);
+			//video.requestVideoFrameCallback(videoCB);
+			setTimeout(() => 
+			{
+				video.requestVideoFrameCallback(videoCB);
+			}, 100);
+		}
+		
+		async function startCapture() 
+		{
+			ip = document.querySelector("#ip").value;
+			localStorage.setItem('ip', ip);
+			canvas = document.querySelector('#c');
+			ctx = canvas.getContext('2d');			
+			vcanvas = document.querySelector('#vc');
+			vctx = vcanvas.getContext('2d');			
+			video = document.querySelector('video');
+			
+			video.srcObject = await navigator.mediaDevices.getDisplayMedia({video: {cursor: "always"}, audio: false});
+			setTimeout(() => 
+			{
+				vcanvas.width = video.videoWidth;
+				vcanvas.height = video.videoHeight;
+				video.play();
+				video.requestVideoFrameCallback(videoCB);
+			}, 250);
+		}
+
+	</script>
+</head>
+
+<body style="font-family: arial" onload="document.getElementById('ip').value = localStorage.getItem('ip')">
+	<h1><a href="https://youtube.com/bitlunislab">bitluni's</a> screen share</h1>
+	<button onclick="startCapture();">share</button><input id="ip" type="text" placeholder="192.168.bla.blup"><br>
+	<video autoplay hidden height="16px"></video><br>
+	<canvas id = "vc" width="16px" height="16px" hidden></canvas>
+	<canvas id = "c" width="16px" height="16px" style="zoom: 16" ></canvas><br>
+</body>
+</html>
