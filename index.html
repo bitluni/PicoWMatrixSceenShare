@@ -37,8 +37,8 @@
 				for(var x = 0; x < xres; x++)
 				{
 					let r = pixels[(x + y * xres) * 4 + 0] >> 3;
-					let g = pixels[(x + y * xres) * 4 + 1] >> 4;
-					let b = pixels[(x + y * xres) * 4 + 2] >> 4;
+					let g = pixels[(x + y * xres) * 4 + 1] >> 2;
+					let b = pixels[(x + y * xres) * 4 + 2] >> 3;
 					let rgb = r | (g << 5) | (b << 11);
 					buff[(y * xres + x) * 2 + 0] = rgb & 255;
 					buff[(y * xres + x) * 2 + 1] = rgb >> 8;

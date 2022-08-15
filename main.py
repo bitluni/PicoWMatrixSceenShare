@@ -76,7 +76,7 @@ while True:
                                 r = rgb & 31
                                 g = (rgb >> 5) & 63
                                 b = rgb >> 11
-                                wall[mapPixel(x, y)] = (r<<2, g<<2, b<<2)
+                                wall[mapPixel(x, y)] = (r<<1, g<<0, b<<1)
                                 start += 2
                         wall.write()
 						cl.send('HTTP/1.0 200 OK\r\nAccess-Control-Allow-Origin:*\r\n')
